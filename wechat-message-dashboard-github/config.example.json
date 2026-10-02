@@ -1,0 +1,6 @@
+{
+  "db_dir": "这里填写微信归档目录（含 message_0.db / contact.db / biz_message_0.db）",
+  "self": "这里填写你的微信 wxid（形如 wxid_xxxxxxxxxxxx）",
+  "self_aliases": ["你的昵称", "备注名片段"],
+  "output_dir": "output"
+}

@@ -1,0 +1,708 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>微信消息看板</title>
+<style>
+:root{
+  --bg:#f6f7f9; --card:#ffffff; --line:#eef0f3;
+  --text:#24292f; --muted:#8a9099; --light:#b9bec6;
+  --green:#1f7a5a; --green-soft:#e6f2ed; --orange:#e2553f; --orange-soft:#fbeae6;
+  --blue:#4a7fb5; --blue-soft:#e8eef7; --purple:#7a5fb5; --purple-soft:#efeaf7;
+  --amber:#b7791f; --amber-soft:#faf0dd;
+  --shadow:0 1px 3px rgba(23,25,35,.06),0 2px 12px rgba(23,25,35,.04);
+  --radius:10px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{
+  font-family:"PingFang SC","Microsoft YaHei","Segoe UI","Helvetica Neue",sans-serif;
+  background:var(--bg);color:var(--text);font-size:14px;line-height:1.55;
+  -webkit-font-smoothing:antialiased;
+}
+button{font-family:inherit;cursor:pointer}
+.wrap{max-width:1280px;margin:0 auto;padding:22px 22px 44px}
+
+.topbar{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;margin-bottom:18px}
+.topbar h1{font-size:24px;font-weight:700;letter-spacing:.3px}
+.topbar h1 em{font-style:normal;color:var(--green)}
+.sub{margin-top:4px;color:var(--muted);font-size:13px}
+.sub b{color:var(--text)}
+.top-actions{display:flex;align-items:center;gap:8px;margin-top:2px;flex-shrink:0}
+
+.search{position:relative;display:flex;align-items:center}
+.search input{
+  width:220px;border:1px solid var(--line);background:var(--card);border-radius:8px;
+  padding:7px 12px 7px 32px;font-size:13px;color:var(--text);box-shadow:var(--shadow);outline:none;
+}
+.search input:focus{border-color:var(--green)}
+.search svg{position:absolute;left:10px;color:var(--light);pointer-events:none}
+.search .clear{position:absolute;right:8px;color:var(--light);display:none;background:none;border:0;font-size:14px}
+.search.has .clear{display:block}
+
+.filters{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:14px;min-height:6px}
+.filters:empty{display:none}
+.chip{display:inline-flex;align-items:center;gap:6px;background:var(--green-soft);color:var(--green);border-radius:20px;padding:4px 10px 4px 12px;font-size:12px;font-weight:500}
+.chip button{border:0;background:none;color:var(--green);font-size:13px;line-height:1;opacity:.75}
+.chip button:hover{opacity:1}
+.chip.reset{background:var(--card);border:1px solid var(--line);color:var(--muted);cursor:pointer}
+.chip.reset:hover{color:var(--text)}
+
+/* 指标卡 */
+.metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px}
+.mcard{
+  background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);
+  padding:14px 14px 12px;cursor:pointer;transition:transform .12s,box-shadow .12s;position:relative;
+}
+.mcard:hover{transform:translateY(-2px);box-shadow:0 6px 20px rgba(23,25,35,.10)}
+.mcard .num{font-size:24px;font-weight:700;letter-spacing:.3px;line-height:1.15}
+.mcard .lab{font-size:12px;color:var(--muted);margin-top:4px}
+.mcard .tip{font-size:11px;color:var(--light);margin-top:2px;min-height:14px}
+.mcard.red .num{color:var(--orange)}
+.mcard.green .num{color:var(--green)}
+.mcard.blue .num{color:var(--blue)}
+.mcard.purple .num{color:var(--purple)}
+.mcard.amber .num{color:var(--amber)}
+.mcard .pdot{position:absolute;top:12px;right:12px;width:8px;height:8px;border-radius:50%;background:var(--orange);box-shadow:0 0 0 4px var(--orange-soft)}
+
+/* 标签页 */
+.tabs{display:flex;gap:6px;background:var(--card);border-radius:12px;box-shadow:var(--shadow);padding:6px;margin-bottom:18px;overflow-x:auto}
+.tab{
+  position:relative;border:0;background:none;padding:9px 14px;border-radius:8px;font-size:14px;color:var(--muted);
+  display:inline-flex;align-items:center;gap:7px;white-space:nowrap;transition:background .15s,color .15s;
+}
+.tab::before{content:"";position:absolute;left:0;top:20%;bottom:20%;width:3px;border-radius:3px;background:var(--green);opacity:0;transform:scaleY(.6);transition:.18s}
+.tab:hover{background:var(--green-soft);color:var(--text)}
+.tab.on{color:var(--text);font-weight:600}
+.tab.on::before{opacity:1;transform:scaleY(1)}
+.tab .badge{background:#eef0f3;color:var(--muted);border-radius:10px;font-size:11px;padding:1px 7px;min-width:18px;text-align:center}
+.tab.on .badge{background:var(--green-soft);color:var(--green)}
+.tab .badge.hot{background:var(--orange-soft);color:var(--orange)}
+.badge.flash{animation:flash .8s}
+@keyframes flash{0%,100%{background:#eef0f3}50%{background:var(--orange);color:#fff}}
+
+/* 总览顶部三窗口 */
+.win-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:18px}
+.panel{background:var(--card);border-radius:12px;box-shadow:var(--shadow);padding:16px;display:flex;flex-direction:column}
+.panel h3{font-size:14px;font-weight:600;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between}
+.panel h3 .more{font-size:12px;color:var(--green);font-weight:400;cursor:pointer}
+.panel h3 .cnt{font-size:12px;color:var(--muted);font-weight:400}
+.legend{font-size:11px;color:var(--light);margin-top:10px;line-height:1.7}
+
+/* 待回复小项 */
+.p-item{display:flex;flex-direction:column;gap:2px;padding:8px 6px;border-bottom:1px solid var(--line);cursor:pointer;border-radius:6px}
+.p-item:last-child{border-bottom:0}
+.p-item:hover{background:#f7f8fa}
+.pi-nm{display:flex;align-items:center;gap:6px;min-width:0;flex-wrap:wrap}
+.pi-name{font-weight:600;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:150px}
+.pi-cat{font-size:11px;color:var(--light)}
+.pi-msg{font-size:12px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pi-meta{font-size:11px;color:var(--light)}
+.pr{font-size:11px;border-radius:4px;padding:1px 6px;font-weight:600;flex-shrink:0}
+.pr.p0{background:var(--orange-soft);color:var(--orange)}
+.pr.p1{background:var(--blue-soft);color:var(--blue)}
+.pr.mention{background:var(--purple-soft);color:var(--purple)}
+.subhead{font-size:12px;color:var(--muted);margin:10px 0 6px;font-weight:600}
+.subhead:first-child{margin-top:0}
+.subhead b{color:var(--orange)}
+.subhead b.blue{color:var(--blue)}
+
+/* 任务/节点卡片 */
+.mil-item{display:flex;flex-direction:column;gap:2px;padding:8px 6px;border-bottom:1px solid var(--line);cursor:pointer;border-radius:6px}
+.mil-item:last-child{border-bottom:0}
+.mil-item:hover{background:#f7f8fa}
+.mil-nm{font-weight:600;font-size:13px;color:var(--text)}
+.mil-tx{font-size:12px;color:var(--muted);word-break:break-all}
+.mil-t{font-size:11px;color:var(--light)}
+
+/* 分类分布条 */
+.pbar-row{margin-bottom:14px;cursor:pointer}
+.pbar-row .head{display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px}
+.pbar-row .head .cnt{font-weight:600}
+.bar{height:8px;border-radius:6px;background:#eef0f3;overflow:hidden}
+.bar i{display:block;height:100%;border-radius:6px;transform:scaleX(0);transform-origin:left;transition:transform .8s cubic-bezier(.3,.7,.3,1)}
+.bar.green i{background:var(--green)}
+.bar.blue i{background:var(--blue)}
+.bar.purple i{background:var(--purple)}
+.bar.orange i{background:var(--orange)}
+.bar.amber i{background:var(--amber)}
+.bar.gray i{background:#c3c8d0}
+
+.ov{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.note{font-size:12px;color:var(--muted);background:#f7f8fa;border-radius:8px;padding:9px 11px;margin-top:2px}
+.note b{color:var(--green);font-weight:600}
+.line-row{display:flex;align-items:center;justify-content:space-between;padding:10px 6px;border-bottom:1px solid var(--line);cursor:pointer;border-radius:7px}
+.line-row:hover{background:#f7f8fa}
+.line-row .nm{display:flex;align-items:center;gap:8px;font-size:13px;min-width:0}
+.line-row .nm .t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* 会话表 */
+.conv{border-radius:12px;box-shadow:var(--shadow);overflow:hidden}
+.conv-head{display:grid;grid-template-columns:1.4fr 1.6fr 90px 110px 130px;gap:10px;padding:10px 14px;background:#fafbfc;font-size:12px;color:var(--muted);align-items:center}
+.conv-row{
+  display:grid;grid-template-columns:1.4fr 1.6fr 90px 110px 130px;gap:10px;align-items:center;padding:12px 14px;
+  background:var(--card);border-top:1px solid var(--line);cursor:pointer;transition:background .12s;
+}
+.conv-row:first-child{border-top:0}
+.conv-row:hover{background:#f7f8fa}
+.cell-nm{font-weight:600;font-size:13.5px;display:flex;align-items:center;gap:7px;min-width:0}
+.cell-nm .t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pill{font-size:11px;border-radius:4px;padding:1px 6px;flex-shrink:0}
+.pill.p-green{background:var(--green-soft);color:var(--green)}
+.pill.p-blue{background:var(--blue-soft);color:var(--blue)}
+.pill.p-purple{background:var(--purple-soft);color:var(--purple)}
+.pill.p-orange{background:var(--orange-soft);color:var(--orange)}
+.pill.p-gray{background:#f0f1f3;color:#7c838c}
+.cell-lmsg{font-size:12px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cell-lmsg .who{color:var(--light)}
+.cell-ms{font-size:13px;font-weight:600}
+.cell-last{font-size:12px;color:var(--muted)}
+.status{font-size:12px;color:var(--muted);white-space:nowrap}
+.status .red{color:var(--orange);font-weight:600}
+.status .g{color:var(--green)}
+mark{background:#ffefc0;border-radius:2px;padding:0 1px}
+.nores{text-align:center;color:var(--muted);padding:40px}
+
+/* 公众号列表 */
+.gzh-item{display:flex;align-items:center;justify-content:space-between;padding:10px 6px;border-bottom:1px solid var(--line);border-radius:6px}
+.gzh-item:hover{background:#f7f8fa}
+.gzh-nm{display:flex;align-items:center;gap:8px;min-width:0}
+.gzh-nm .t{font-weight:600;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.gzh-nm .sub{color:var(--light);font-size:12px;flex-shrink:0}
+.gzh-r{display:flex;align-items:center;gap:14px;font-size:12px;color:var(--muted);flex-shrink:0}
+
+/* 抽屉 */
+.overlay{position:fixed;inset:0;background:rgba(20,22,28,.36);opacity:0;pointer-events:none;transition:opacity .2s;z-index:90}
+.overlay.on{opacity:1;pointer-events:auto}
+.drawer{
+  position:fixed;top:0;right:0;bottom:0;width:440px;max-width:92vw;background:#fff;z-index:100;
+  transform:translateX(100%);transition:transform .26s cubic-bezier(.3,.6,.3,1);box-shadow:-10px 0 40px rgba(23,25,35,.14);
+  display:flex;flex-direction:column;
+}
+.drawer.on{transform:translateX(0)}
+.drawer-head{border-bottom:1px solid var(--line);padding:18px 20px}
+.drawer-head .k{font-size:12px;color:var(--muted);margin-bottom:3px}
+.drawer-head .n{font-size:18px;font-weight:700;word-break:break-all}
+.drawer-head .meta{display:flex;flex-wrap:wrap;gap:6px;margin-top:9px}
+.drawer-head .meta span{font-size:12px;background:#f4f5f7;border-radius:6px;padding:3px 8px;color:var(--muted)}
+.drawer-head .meta span b{color:var(--text)}
+.drawer-body{flex:1;overflow:auto;padding:18px 20px}
+.drawer h4{font-size:13px;font-weight:600;margin:16px 0 9px}
+.summary{background:var(--green-soft);border-left:3px solid var(--green);border-radius:8px;padding:11px 13px;font-size:13px;color:#1d3a2f}
+.summary p{margin:4px 0}
+.summary .hl{color:var(--green);font-weight:600}
+.summary.alert{background:var(--orange-soft);border-left-color:var(--orange);color:#5b2a20}
+.summary.alert .hl{color:var(--orange)}
+.tl{display:flex;flex-direction:column;gap:12px}
+.tl-item{position:relative;padding-left:16px}
+.tl-item::before{content:"";position:absolute;left:3px;top:5px;bottom:-14px;width:2px;background:var(--line)}
+.tl-item:last-child::before{display:none}
+.tl-item .pm{position:absolute;left:0;top:5px;width:8px;height:8px;border-radius:50%;background:var(--green)}
+.tl-item.mine .pm{background:var(--blue)}
+.tl-item .who{font-size:11px;color:var(--muted);margin-top:1px}
+.tl-item .t{font-size:11px;color:var(--light)}
+.tl-item .c{font-size:13px;margin-top:2px;padding:7px 9px;background:#f6f7f9;border-radius:8px;word-break:break-all}
+.drawer-foot{border-top:1px solid var(--line);padding:14px 20px;display:flex;flex-wrap:wrap;gap:8px}
+.ss-btn{flex:1;min-width:88px;border:1px solid var(--line);background:#fff;border-radius:8px;padding:8px 6px;font-size:12.5px;color:var(--text)}
+.ss-btn:hover{border-color:var(--green);color:var(--green)}
+.ss-btn.primary{background:var(--green);color:#fff;border-color:var(--green)}
+
+#toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(20px);background:#24292f;color:#fff;padding:10px 18px;border-radius:9px;font-size:13px;opacity:0;transition:.25s;z-index:300}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+@media(max-width:900px){
+  .metrics{grid-template-columns:repeat(2,1fr)}
+  .win-grid{grid-template-columns:1fr}
+  .ov{grid-template-columns:1fr}
+  .conv-head,.conv-row{grid-template-columns:1.4fr 1fr 70px 90px}
+  .cell-lmsg{display:none}
+  .conv-head{grid-template-columns:1.4fr 70px 90px 40px}
+  .conv-row{grid-template-columns:1.4fr 70px 90px 40px}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="topbar">
+    <div>
+      <h1>微信消息<em>看板</em></h1>
+      <div class="sub">生成于 <b id="genAt"></b> · 共 <b id="convTotal">0</b> 个会话 / <b id="msgTotal">0</b> 条消息</div>
+    </div>
+    <div class="top-actions">
+      <div class="search" id="searchWrap">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+        <input id="q" placeholder="搜索会话 / 关键词" autocomplete="off">
+        <button class="clear" id="qClear">×</button>
+      </div>
+      <button class="ss-btn" id="exportBtn" style="width:auto;padding:7px 14px">导出</button>
+    </div>
+  </header>
+
+  <div class="filters" id="filters"></div>
+
+  <div class="metrics">
+    <div class="mcard green" data-act="ov"><div class="num" id="c1">0</div><div class="lab">总会话数</div><div class="tip" id="c1d"></div></div>
+    <div class="mcard" data-act="ov"><div class="num" id="c2">0</div><div class="lab">总消息数</div><div class="tip" id="c2d"></div></div>
+    <div class="mcard red" data-act="pending"><span class="pdot"></span><div class="num" id="c3">0</div><div class="lab">待回复对话</div><div class="tip" id="c3d"></div></div>
+    <div class="mcard blue" data-act="ov"><div class="num" id="c4">0</div><div class="lab">24h 新增聊天</div><div class="tip" id="c4d"></div></div>
+    <div class="mcard purple" data-act="milestone"><div class="num" id="c5">0</div><div class="lab">主线任务</div><div class="tip" id="c5d"></div></div>
+    <div class="mcard amber" data-act="milestone"><div class="num" id="c6">0</div><div class="lab">项目节点/约定</div><div class="tip" id="c6d"></div></div>
+    <div class="mcard green" data-act="gzh"><div class="num" id="c7">0</div><div class="lab">公众号/通知</div><div class="tip" id="c7d"></div></div>
+    <div class="mcard purple" data-act="marketing"><div class="num" id="c8">0</div><div class="lab">营销/推送</div><div class="tip" id="c8d"></div></div>
+  </div>
+
+  <nav class="tabs" id="tabs"></nav>
+
+  <div id="overview" class="ov-wrap">
+    <div class="win-grid">
+      <div class="panel" id="pendingWin">
+        <h3>待回复对话 <span class="cnt" id="pendingCnt"></span></h3>
+        <div id="pendingList"></div>
+      </div>
+      <div class="panel">
+        <h3>24h 新增聊天 <span class="cnt" id="new24Cnt"></span></h3>
+        <div id="new24List"></div>
+      </div>
+      <div class="panel">
+        <h3>主线任务 <span class="cnt" id="taskCnt"></span></h3>
+        <div id="taskList"></div>
+      </div>
+    </div>
+    <div class="ov">
+      <div class="panel">
+        <h3>会话构成（按分类）</h3>
+        <div id="msgbars"></div>
+        <div class="note" id="msgNote"></div>
+        <div class="legend">进度条为会话数量占比；点击可进入对应分栏。</div>
+      </div>
+      <div class="panel">
+        <h3>数据概览</h3>
+        <div id="overviewInfo"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="tabContent" style="display:none"></div>
+</div>
+
+<div class="overlay" id="overlay"></div>
+<aside class="drawer" id="drawer">
+  <div class="drawer-head">
+    <div class="k">会话详情 · <span id="dk"></span></div>
+    <div class="n" id="dn"></div>
+    <div class="meta" id="dmeta"></div>
+  </div>
+  <div class="drawer-body">
+    <h4>会话小结</h4>
+    <div class="summary" id="dai"></div>
+    <h4>最近消息</h4>
+    <div class="tl" id="dtl"></div>
+  </div>
+  <div class="drawer-foot">
+    <button class="ss-btn" id="dOpen">打开微信</button>
+    <button class="ss-btn" id="dCopy">复制会话名</button>
+    <button class="ss-btn primary" id="dClose">关闭</button>
+  </div>
+</aside>
+
+<div id="toast"></div>
+
+<script>
+/* ================= 数据层 ================= */
+const DATA = __JSON__;
+const NOW = Math.floor(Date.now()/1000);
+const CONVERSATIONS = DATA.conversations || [];
+const PENDING = DATA.pending || [];
+const NEW24 = DATA.new24h || [];
+const TASKS = DATA.mainlineTasks || [];
+const MILESTONES = DATA.milestones || [];
+const GZH = DATA.gzh || [];
+const MARKETING = DATA.marketing || [];
+const STATS = DATA.stats || {};
+
+const CAT = {
+  work:      ["工作", "p-orange"],
+  personal:  ["个人", "p-blue"],
+  gzh:       ["公众号", "p-green"],
+  marketing: ["营销", "p-purple"],
+};
+const TABS = [
+  ["ov","总览"],
+  ["pending","待回复"],
+  ["work","工作与项目"],
+  ["milestone","项目节点与约定"],
+  ["personal","个人聊天"],
+  ["gzh","公众号/通知"],
+  ["marketing","营销/推送"],
+];
+
+let state = { tab:"ov", q:"", drawerId:null };
+
+/* ================= 工具 ================= */
+const $=s=>document.querySelector(s);
+function fmtAge(ts){
+  if(!ts)return "";
+  const d=NOW-ts;
+  if(d<0)return "刚刚";
+  if(d<60)return "刚刚";
+  if(d<3600)return Math.floor(d/60)+"分钟前";
+  if(d<86400)return Math.floor(d/3600)+"小时前";
+  if(d<30*86400)return Math.floor(d/86400)+"天前";
+  return Math.floor(d/(30*86400))+"月前";
+}
+function fmtDT(ts){ if(!ts)return ""; const d=new Date(ts*1000);const p=n=>String(n).padStart(2,"0");return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`; }
+function fmtNum(n){ if(n>=100000000)return (n/100000000).toFixed(2)+"亿"; if(n>=10000)return (n/10000).toFixed(1)+"万"; return String(n); }
+function hl(text){
+  if(!state.q||!text)return text;
+  const i=String(text).toLowerCase().indexOf(state.q.toLowerCase());
+  if(i<0)return text;
+  return String(text).slice(0,i)+"<mark>"+String(text).slice(i,i+state.q.length)+"</mark>"+String(text).slice(i+state.q.length);
+}
+function qMatchC(c){
+  if(!state.q)return true;
+  const q=state.q.toLowerCase();
+  if(c.name.toLowerCase().includes(q))return true;
+  if((c.username||"").toLowerCase().includes(q))return true;
+  if(c.lastText && c.lastText.toLowerCase().includes(q))return true;
+  if(c.pendingReason && c.pendingReason.toLowerCase().includes(q))return true;
+  return false;
+}
+function catLabel(cat){ return CAT[cat] ? CAT[cat][0] : ""; }
+function catPill(cat){ return CAT[cat] ? CAT[cat][1] : "p-gray"; }
+
+/* 数字滚动 */
+function animateNum(el,target,dur=600){
+  if(el._t)clearInterval(el._t);
+  const from=parseInt(String(el.textContent).replace(/[^\d]/g,""))||0;
+  if(from===target){el.textContent=target;return}
+  const t0=performance.now();
+  el._t=setInterval(()=>{
+    const p=Math.min(1,(performance.now()-t0)/dur);
+    const ease=1-Math.pow(1-p,3);
+    el.textContent=Math.round(from+(target-from)*ease);
+    if(p>=1){el.textContent=target;clearInterval(el._t)}
+  },16);
+}
+
+/* ================= 指标卡 ================= */
+function renderMetrics(){
+  const totalMsgs=CONVERSATIONS.reduce((s,c)=>s+c.msgs,0);
+  const p0=PENDING.filter(c=>c.priority===2).length;
+  const p1=PENDING.filter(c=>c.priority===1).length;
+  const gzhSvc=CONVERSATIONS.filter(c=>c.category==="gzh").length;
+  const set=(id,v)=>{animateNum($("#"+id),v)};
+  setTimeout(()=>{
+    set("c1",CONVERSATIONS.length);
+    set("c2",totalMsgs);
+    set("c3",PENDING.length);
+    set("c4",NEW24.length);
+    set("c5",TASKS.length);
+    set("c6",MILESTONES.length);
+    set("c7",gzhSvc+GZH.length);
+    set("c8",MARKETING.length);
+    $("#c1d").textContent="工作 "+STATS.work+" · 个人 "+STATS.personal;
+    $("#c2d").textContent=fmtNum(totalMsgs)+" 条";
+    $("#c3d").textContent="最高 "+p0+" · 留意 "+p1;
+    $("#c4d").textContent="24 小时内新消息";
+    $("#c5d").textContent="需跟进的任务";
+    $("#c6d").textContent="时间节点/约定";
+    $("#c7d").textContent="公众号 "+GZH.length+" · 通知 "+gzhSvc;
+    $("#c8d").textContent="营销/推送账号";
+  },80);
+}
+
+/* ================= 标签页 ================= */
+function renderTabs(){
+  const el=$("#tabs");el.innerHTML="";
+  TABS.forEach(([k,l])=>{
+    const b=document.createElement("button");
+    b.className="tab"+(state.tab===k?" on":"");
+    b.dataset.t=k;
+    let n=0, hot=false;
+    if(k==="ov")n=CONVERSATIONS.length;
+    else if(k==="pending"){n=PENDING.length;hot=true}
+    else if(k==="work")n=STATS.work||CONVERSATIONS.filter(c=>c.category==="work").length;
+    else if(k==="milestone")n=TASKS.length+MILESTONES.length;
+    else if(k==="personal")n=STATS.personal||CONVERSATIONS.filter(c=>c.category==="personal").length;
+    else if(k==="gzh")n=GZH.length+CONVERSATIONS.filter(c=>c.category==="gzh").length;
+    else if(k==="marketing")n=MARKETING.length;
+    b.innerHTML=`${l}<span class="badge${hot?' hot':''}">${n}</span>`;
+    b.onclick=()=>{switchTab(k)};
+    el.appendChild(b);
+  });
+}
+function switchTab(t){
+  state.tab=t;
+  if(t==="ov"){$("#tabContent").style.display="none";$("#overview").style.display="block"}
+  else{$("#overview").style.display="none";$("#tabContent").style.display="block";renderTabContent()}
+  renderTabs();
+  window.scrollTo({top:0,behavior:"smooth"});
+}
+
+/* ================= 通用小项 ================= */
+function pendingRow(c, short){
+  const el=document.createElement("div");el.className="p-item";
+  const mBadge = c.mentioned ? '<span class="pr mention">@点名</span>' : '';
+  const pr = c.priority===2 ? '<span class="pr p0">最高</span>' : '<span class="pr p1">留意</span>';
+  const reason = short ? '' : `<span class="pi-meta">${c.pendingReason||''} · ${fmtAge(c.lastTime)}</span>`;
+  el.innerHTML=`
+    <span class="pi-nm"><span class="pi-name">${hl(c.name)}</span>${mBadge}${pr}<span class="pi-cat">${catLabel(c.category)}</span></span>
+    <span class="pi-msg">${hl((c.lastText||"").slice(0,60))}</span>${reason}`;
+  el.onclick=()=>openDrawer(c.id);
+  return el;
+}
+function taskRow(t){
+  const el=document.createElement("div");el.className="mil-item";
+  el.innerHTML=`<div class="mil-nm">${hl(t.name)}</div><div class="mil-tx">${hl(t.text||"")}</div><div class="mil-t">${fmtAge(t.t)} · ${fmtDT(t.t)}</div>`;
+  const c=CONVERSATIONS.find(x=>x.name===t.name);
+  if(c)el.onclick=()=>openDrawer(c.id);
+  return el;
+}
+function gzhRow(g){
+  const el=document.createElement("div");el.className="gzh-item";
+  el.innerHTML=`<span class="gzh-nm"><span class="t">${hl(g.name)}</span><span class="sub">${g.msgs} 条</span></span><span class="gzh-r"><span>${fmtAge(g.lastTime)||"—"}</span><span>${fmtDT(g.lastTime)||""}</span></span>`;
+  return el;
+}
+
+/* ================= 总览 ================= */
+function renderOverview(){
+  // 待回复窗口
+  const pw=$("#pendingList");pw.innerHTML="";
+  const p0=PENDING.filter(c=>c.priority===2);
+  const p1=PENDING.filter(c=>c.priority===1);
+  $("#pendingCnt").innerHTML=`<b style="color:var(--orange)">最高 ${p0.length}</b> · <b style="color:var(--blue)">留意 ${p1.length}</b>`;
+  if(p0.length){const h=document.createElement("div");h.className="subhead";h.innerHTML="<b>最高优先</b>（被点名 / 24h未回）";pw.appendChild(h);p0.slice(0,4).forEach(c=>pw.appendChild(pendingRow(c,true)));}
+  if(p1.length){const h=document.createElement("div");h.className="subhead";h.innerHTML="<b class='blue'>一般</b>（长期未回）";pw.appendChild(h);p1.slice(0,4).forEach(c=>pw.appendChild(pendingRow(c,true)));}
+  if(!PENDING.length)pw.innerHTML='<div class="nores">暂无待回复</div>';
+
+  // 24h 新增
+  const nw=$("#new24List");nw.innerHTML="";
+  $("#new24Cnt").textContent=NEW24.length+" 个";
+  NEW24.slice(0,8).forEach(c=>nw.appendChild(pendingRow(c,true)));
+  if(!NEW24.length)nw.innerHTML='<div class="nores">24h 内暂无新聊天</div>';
+
+  // 主线任务
+  const tl=$("#taskList");tl.innerHTML="";
+  $("#taskCnt").textContent=TASKS.length+" 条";
+  TASKS.slice(0,8).forEach(t=>tl.appendChild(taskRow(t)));
+  if(!TASKS.length)tl.innerHTML='<div class="nores">未提取到主线任务</div>';
+
+  // 会话构成
+  const bars=$("#msgbars");bars.innerHTML="";
+  const cats=[["work","工作与项目","orange"],["personal","个人聊天","blue"],["gzh","公众号/通知","green"],["marketing","营销/推送","purple"]];
+  const total=Math.max(1,CONVERSATIONS.length);
+  cats.forEach(([k,l,col])=>{
+    const n=CONVERSATIONS.filter(c=>c.category===k).length;
+    const pct=Math.round(n/total*100);
+    const row=document.createElement("div");row.className="pbar-row";
+    row.innerHTML=`<div class="head"><span>${l}</span><span class="cnt">${n} 会话 · ${pct}%</span></div><div class="bar ${col}"><i style="width:${pct}%"></i></div>`;
+    row.onclick=()=>switchTab(k==="gzh"?"gzh":k);
+    bars.appendChild(row);
+    requestAnimationFrame(()=>{requestAnimationFrame(()=>{row.querySelector("i").style.transform="scaleX("+(pct/100)+")"})});
+  });
+  $("#msgNote").innerHTML=`共 <b>${CONVERSATIONS.length}</b> 个会话、<b>${fmtNum(DATA.totalMsgs)}</b> 条消息；待回复 <b>${PENDING.length}</b> 个（最高 ${p0.length} / 留意 ${p1.length}）。`;
+
+  // 数据概览
+  const info=$("#overviewInfo");info.innerHTML="";
+  const rows=[
+    ["总消息",fmtNum(DATA.totalMsgs)+" 条"],
+    ["时间跨度",Math.round((DATA.tmax-DATA.tmin)/86400)+" 天"],
+    ["群聊会话",CONVERSATIONS.filter(c=>c.isGroup).length+" 个"],
+    ["私聊会话",CONVERSATIONS.filter(c=>!c.isGroup).length+" 个"],
+    ["待回复最高优先",p0.length+" 个"],
+    ["24h 新增",NEW24.length+" 个"],
+    ["主线任务",TASKS.length+" 条"],
+    ["项目节点/约定",MILESTONES.length+" 条"],
+    ["我的昵称",DATA.self.nick||DATA.self.username||""],
+  ];
+  rows.forEach(([k,v])=>{
+    const r=document.createElement("div");r.className="line-row";r.style.cursor="default";
+    r.innerHTML=`<span class="nm" style="color:var(--muted)">${k}</span><span style="font-weight:600;font-size:13px">${v}</span>`;
+    info.appendChild(r);
+  });
+}
+
+/* ================= 会话表行 ================= */
+function convRow(c){
+  const r=document.createElement("div");r.className="conv-row";
+  r.dataset.id=c.id;
+  let who="";
+  const last=c.recent&&c.recent.length?c.recent[0]:null;
+  if(last&&last.who){ who=`<span class="who">${last.mine===true?"我":last.who}：</span>`; }
+  let st;
+  if(c.isGroup){ st=`<span class="g">👥 ${c.members}</span>`; }
+  else if(c.pending){ st=c.priority===2?`<span class="red">待回复·最高</span>`:`<span class="red">待回复</span>`; }
+  else if(last&&last.mine===false){ st=`<span class="red">对方</span>`; }
+  else if(last&&last.mine===true){ st=`<span class="g">我</span>`; }
+  else { st=`<span>—</span>`; }
+  const lmsg=hl((c.lastText||"").slice(0,60));
+  r.innerHTML=`<span class="cell-nm"><span class="t">${hl(c.name)}</span><span class="pill ${catPill(c.category)}">${catLabel(c.category)}</span></span>
+    <span class="cell-lmsg">${who}${lmsg}</span>
+    <span class="cell-ms">${c.msgs30}</span>
+    <span class="cell-last">${fmtAge(c.lastTime)}</span>
+    <span class="status">${st}</span>`;
+  r.onclick=()=>openDrawer(c.id);
+  return r;
+}
+function listHead(){
+  return `<div class="conv-head"><span>会话</span><span>最后消息</span><span>近30天</span><span>最后活跃</span><span>状态</span></div>`;
+}
+function renderConvTab(cat){
+  const tc=$("#tabContent");
+  const L=CONVERSATIONS.filter(c=>c.category===cat && qMatchC(c)).sort((a,b)=>b.msgs30-a.msgs30);
+  const title=catLabel(cat);
+  tc.innerHTML=`<div class="panel"><h3>${title} · 按近30天活跃度排序 <span class="cnt">${L.length} 个会话</span></h3><div class="conv">${listHead()}<div id="pl"></div></div></div>`;
+  const box=$("#pl");L.forEach(c=>box.appendChild(convRow(c)));
+  if(!L.length)box.innerHTML='<div class="nores">该分类暂无会话</div>';
+}
+
+/* ================= 待回复 Tab ================= */
+function renderPendingTab(){
+  const tc=$("#tabContent");
+  const p0=PENDING.filter(c=>c.priority===2 && qMatchC(c));
+  const p1=PENDING.filter(c=>c.priority===1 && qMatchC(c));
+  let html=`<div class="panel"><h3>待回复对话 · 分级 <span class="cnt">最高 ${p0.length} · 留意 ${p1.length}</span></h3>`;
+  html+=`<div class="subhead"><b>最高优先</b>（被点名 / 有未读 / 24h 内对方来信未回）</div>`;
+  html+=`<div id="p0box"></div><div class="subhead" style="margin-top:16px"><b class="blue">一般</b>（多为长期未回）</div><div id="p1box"></div></div>`;
+  tc.innerHTML=html;
+  const b0=$("#p0box"), b1=$("#p1box");
+  p0.forEach(c=>b0.appendChild(pendingRow(c,false)));
+  p1.forEach(c=>b1.appendChild(pendingRow(c,false)));
+  if(!p0.length)b0.innerHTML='<div class="nores">无最高优先待回复</div>';
+  if(!p1.length)b1.innerHTML='<div class="nores">无一般待回复</div>';
+}
+
+/* ================= 项目节点与约定 Tab ================= */
+function renderMilestoneTab(){
+  const tc=$("#tabContent");
+  const q=state.q.toLowerCase();
+  const tasks=TASKS.filter(t=>!state.q || t.name.toLowerCase().includes(q) || (t.text||"").toLowerCase().includes(q));
+  const nodes=MILESTONES.filter(t=>!state.q || t.name.toLowerCase().includes(q) || (t.text||"").toLowerCase().includes(q));
+  let html=`<div class="panel"><h3>主线任务 <span class="cnt">${tasks.length} 条</span></h3><div id="taskBox"></div></div>`;
+  html+=`<div class="panel" style="margin-top:16px"><h3>项目节点 / 约定 <span class="cnt">${nodes.length} 条</span></h3><div id="nodeBox"></div></div>`;
+  tc.innerHTML=html;
+  const tb=$("#taskBox"), nb=$("#nodeBox");
+  tasks.forEach(t=>tb.appendChild(taskRow(t)));
+  nodes.forEach(t=>nb.appendChild(taskRow(t)));
+  if(!tasks.length)tb.innerHTML='<div class="nores">未提取到主线任务</div>';
+  if(!nodes.length)nb.innerHTML='<div class="nores">未提取到节点/约定</div>';
+}
+
+/* ================= 公众号/通知 Tab ================= */
+function renderGzhTab(){
+  const tc=$("#tabContent");
+  const svc=CONVERSATIONS.filter(c=>c.category==="gzh" && qMatchC(c));
+  const gz=GZH.filter(g=>!state.q || g.name.toLowerCase().includes(state.q.toLowerCase()));
+  let html=`<div class="panel"><h3>服务 / 通知 <span class="cnt">${svc.length} 个</span></h3><div class="conv">${listHead()}<div id="svcBox"></div></div></div>`;
+  html+=`<div class="panel" style="margin-top:16px"><h3>公众号 <span class="cnt">${gz.length} 个</span></h3><div id="gzhBox"></div></div>`;
+  tc.innerHTML=html;
+  const sb=$("#svcBox");svc.forEach(c=>sb.appendChild(convRow(c)));
+  if(!svc.length)sb.innerHTML='<div class="nores">暂无服务/通知</div>';
+  const gb=$("#gzhBox");gz.forEach(g=>gb.appendChild(gzhRow(g)));
+  if(!gz.length)gb.innerHTML='<div class="nores">暂无公众号</div>';
+}
+
+/* ================= 渲染分派 ================= */
+function renderTabContent(){
+  const t=state.tab;
+  if(t==="pending")renderPendingTab();
+  else if(t==="milestone")renderMilestoneTab();
+  else if(t==="gzh")renderGzhTab();
+  else if(t==="work"||t==="personal"||t==="marketing")renderConvTab(t);
+}
+
+/* ================= 导出 ================= */
+function exportCSV(){
+  const esc=o=>'"'+String(o).replace(/"/g,'""')+'"';
+  let csv="会话名称,微信原始ID,分类,是否群聊,成员数,近30天消息,总消息,最后活跃,待回复,优先级,原因,最后消息\n";
+  CONVERSATIONS.slice().sort((a,b)=>b.msgs30-a.msgs30).forEach(c=>{
+    const pr=c.priority===2?"最高":(c.priority===1?"留意":"");
+    csv+=[esc(c.name),esc(c.username||""),esc(catLabel(c.category)),c.isGroup?"是":"否",c.members,c.msgs30,c.msgs,esc(fmtDT(c.lastTime)),c.pending?"是":"否",pr,esc(c.pendingReason||""),esc(c.lastText||"")].join(",")+"\n";
+  });
+  const a=document.createElement("a");a.href="data:text/csv;charset=utf-8,\ufeff"+encodeURIComponent(csv);a.download="微信消息看板.csv";a.click();
+  toast(`已导出 ${CONVERSATIONS.length} 个会话`);
+}
+
+/* ================= 抽屉 ================= */
+function openDrawer(id){
+  state.drawerId=id; const c=CONVERSATIONS.find(x=>x.id===id);
+  if(!c)return;
+  $("#dk").textContent=catLabel(c.category);
+  $("#dn").textContent=c.name;
+  $("#dmeta").innerHTML=`<span>微信原始ID <b>${c.username||"—"}</b></span><span>分类 <b>${catLabel(c.category)}</b></span><span>${c.isGroup?'成员':'对话'} <b>${c.members}</b></span><span>总消息 <b>${fmtNum(c.msgs)}</b></span><span>近30天 <b>${c.msgs30}</b> 条</span><span>最后活跃 <b>${fmtAge(c.lastTime)}</b></span>`;
+  let sum;
+  if(c.pending){
+    const pr=c.priority===2?"<b>最高优先</b>":(c.priority===1?"<b>一般</b>":"");
+    sum=`<p><span class="hl">待回复</span>：${pr} · ${c.pendingReason||"需跟进"}${c.mentioned?" · 被@点名":""}</p><p><span class="hl">最近动态</span>：最后一条消息于 ${fmtDT(c.lastTime)}（${fmtAge(c.lastTime)}）。</p>`;
+  }else{
+    sum=`<p><span class="hl">活跃度</span>：近30天 ${c.msgs30} 条、近90天 ${c.msgs90} 条，累计 ${fmtNum(c.msgs)} 条。</p><p><span class="hl">最近动态</span>：最后一条消息于 ${fmtDT(c.lastTime)}（${fmtAge(c.lastTime)}）。</p>`;
+  }
+  const box=$("#dai");
+  box.className="summary"+(c.pending?" alert":"");
+  box.innerHTML=sum;
+  const tl=$("#dtl");tl.innerHTML="";
+  const recs=(c.recent&&c.recent.length)?c.recent:[];
+  if(!recs.length)tl.innerHTML='<div class="nores">暂无文本消息</div>';
+  recs.forEach(m=>{
+    const it=document.createElement("div");it.className="tl-item"+(m.mine===true?" mine":"");
+    const who=m.who?`<div class="who">${m.who}</div>`:"";
+    it.innerHTML=`<span class="pm"></span>${who}<span class="t">${fmtDT(m.t)}</span><div class="c">${m.c}</div>`;
+    tl.appendChild(it);
+  });
+  $("#drawer").classList.add("on");$("#overlay").classList.add("on");
+}
+function closeDrawer(){$("#drawer").classList.remove("on");$("#overlay").classList.remove("on")}
+
+/* ================= 事件 ================= */
+$("#q").addEventListener("input",e=>{state.q=e.target.value.trim();$("#searchWrap").classList.toggle("has",!!state.q);refresh()});
+$("#qClear").onclick=()=>{state.q="";$("#q").value="";$("#searchWrap").classList.remove("has");refresh()};
+$("#exportBtn").onclick=exportCSV;
+$("#overlay").onclick=closeDrawer;
+$("#dOpen").onclick=()=>toast("请在微信中搜索会话名打开");
+$("#dCopy").onclick=()=>{const c=CONVERSATIONS.find(x=>x.id===state.drawerId);if(c&&navigator.clipboard){navigator.clipboard.writeText(c.name).then(()=>toast("已复制会话名"))}};
+$("#dClose").onclick=closeDrawer;
+document.querySelectorAll(".mcard").forEach(card=>{
+  card.onclick=()=>{
+    const act=card.dataset.act;
+    if(act==="pending")switchTab("pending");
+    else if(act==="milestone")switchTab("milestone");
+    else if(act==="gzh")switchTab("gzh");
+    else if(act==="marketing")switchTab("marketing");
+    else switchTab("ov");
+  };
+});
+
+/* ================= 刷新 ================= */
+function refresh(){
+  renderFilters();
+  renderMetrics();
+  if(state.tab==="ov"){renderOverview()}
+  else{renderTabContent()}
+  renderTabs();
+}
+function renderFilters(){
+  const f=$("#filters");f.innerHTML="";
+  if(state.q){
+    const c=document.createElement("span");c.className="chip";
+    c.innerHTML=`搜索：「${state.q}」<button>×</button>`;
+    c.querySelector("button").onclick=()=>{state.q="";$("#q").value="";$("#searchWrap").classList.remove("has");refresh()};
+    f.appendChild(c);
+    const r=document.createElement("button");r.className="chip reset";r.textContent="一键重置";
+    r.onclick=()=>{state.q="";$("#q").value="";$("#searchWrap").classList.remove("has");refresh()};
+    f.appendChild(r);
+  }
+}
+
+/* ================= 初始化 ================= */
+function init(){
+  $("#genAt").textContent=DATA.generatedAt;
+  $("#convTotal").textContent=CONVERSATIONS.length;
+  $("#msgTotal").textContent=fmtNum(DATA.totalMsgs);
+  renderTabs();renderMetrics();renderOverview();renderFilters();
+}
+function toast(t){const el=$("#toast");el.textContent=t;el.classList.add("show");clearTimeout(el._t);el._t=setTimeout(()=>el.classList.remove("show"),2200)}
+init();
+</script>
+</body>
+</html>
